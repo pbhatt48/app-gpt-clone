@@ -2,7 +2,7 @@ import os
 from os.path import isfile, join
 
 from PyPDF2 import PdfReader
-from langchain.text_splitter import  CharacterTextSplitter
+from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.memory import ConversationBufferMemory
@@ -37,7 +37,7 @@ def get_pdf_text(pdf_docs):
         pdf_reader = PdfReader(pdf)
         for page in pdf_reader.pages:
             text += page.extract_text()
-    print(text)
+    #print(text)
     return  text
 
 def get_text_chunks(text):
@@ -48,6 +48,7 @@ def get_text_chunks(text):
         length_function=len
     )
     chunks = text_splitter.split_text(text)
+    #print("YEYO == ", chunks)
     return chunks
 
 
@@ -67,13 +68,24 @@ def get_conversation_chain(vectorstore):
     return conversation_chain
 
 def train_my_pdfs():
+    chunk_list=[]
     mypath = os.getcwd() + "/training_docs/"
     pdf_files = [(mypath+f) for f in os.listdir(mypath) if isfile(join(mypath, f))]
     print("pdf files == ", pdf_files)
     raw_text = get_pdf_text(pdf_files)
     text_chunks = get_text_chunks(raw_text)
+    #print("Text Chunks == ", text_chunks)
+    chunk_list.append(text_chunks)
     vectorstore = get_vectorstore(text_chunks)
     st.session_state.conversation = get_conversation_chain(vectorstore)
+    print("COUNTER")
+    return chunk_list
+
+def display_summary(text):
+    if text == None:
+        pass
+    else:
+        st.text_area("Summary of your pdf", value=text, height=800, max_chars=None, key=None)
 
 
 def main():
@@ -81,6 +93,7 @@ def main():
 
 
     print("hello world!")
+
 
     chat = ChatOpenAI(model_name='gpt-3.5-turbo',temperature=0)
     print(chat.model_name)
@@ -92,11 +105,13 @@ def main():
 
 
 
-    st.header("Your Private Tax GPT :male-judge: :money_with_wings:")
+    st.header("Your Private Summarizer GPT :male-judge: :money_with_wings:")
+
 
     # message(("Hello! How are you?"))
     # message("I'm good", is_user=True)
 
+    process_press = False
     with st.sidebar:
         # st.subheader("Your documents")
         # pdf_docs = st.file_uploader(
@@ -117,28 +132,49 @@ def main():
         #
         #         # create conversation chain
         #         st.session_state.conversation = get_conversation_chain(vectorstore)
+        st.subheader("Your documents")
+        pdf_docs = st.file_uploader(
+            "Upload your PDFs here and click on Process", accept_multiple_files=True)
 
+        chunk_list = []
         if st.button("Process"):
             with st.spinner("Processing.."):
-                train_my_pdfs()
+                chunk_list = train_my_pdfs()
+            process_press = True
         user_input = st.text_input("Your Tax Question? :male-teacher:", key="user_input")
+
+
+
+        for i in range(len(chunk_list)):
+            print("CHUNK LIST == ", len(chunk_list))
+            summarize_text = "Can you please summarize this? :" + str(chunk_list[i])
+            st.session_state.messages.append(HumanMessage(content=summarize_text))
+            response_temp = chat(st.session_state.messages)
+            print("temp -response ==", response_temp.content)
 
 
 
         if user_input:
             #message(user_input, is_user=True)
             st.session_state.messages.append(HumanMessage(content=user_input))
-            with st.spinner("Thinking..."):
+            with st.spinner("Thinkingooo..."):
                 response = chat(st.session_state.messages)
+                #print("AI RESPONSE == ", response.content)
+            #st.session_state.messages.append(AIMessage(content=response.content))
             st.session_state.messages.append(AIMessage(content=response.content))
             #message(response.content, is_user=False)
 
+
+    if process_press == True:
+        display_summary(response_temp.content)
     messages = st.session_state.get('messages', [])
-    for i, msg in enumerate(messages[1:]):
-        if i%2 ==0:
-            message(msg.content, is_user=True, key=str(i) + '_user')
-        else:
-            message(msg.content, is_user=False, key=str(i) + '_ai')
+    print("MESSAGE == ", messages)
+    #message(message.content)
+    # for i, msg in enumerate(messages[1:]):
+    #     if i%2 ==0:
+    #         message(msg.content, is_user=True, key=str(i) + '_user')
+    #     else:
+    #         message(msg.content, is_user=False, key=str(i) + '_ai')
 
 if __name__ == '__main__':
     main()
